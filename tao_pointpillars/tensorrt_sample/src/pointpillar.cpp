@@ -42,7 +42,14 @@
     }                                                             \
 }
 
+//这个SimpleProfiler类实现了一个TensorRT的层级性能分析器。主要功能是:
+//继承自nvinfer1::IProfiler,这是一个TensorRT的profile接口。
 
+// 使用方法:
+// 创建Profiler实例,传入名字。
+// 设置到TensorRT执行上下文context中。
+// 执行推理后,可以直接打印profiler,获取性能报告。
+// 比如可以比较FP32与FP16模式下的层级性能差异。或者比较优化前后模型的层级改进。
 struct SimpleProfiler : public nvinfer1::IProfiler
 {
     struct Record
@@ -50,9 +57,10 @@ struct SimpleProfiler : public nvinfer1::IProfiler
         float time{0};
         int count{0};
     };
-
+    // 在reportLayerTime函数中记录每一层的执行时间和调用次数。
     virtual void reportLayerTime(const char* layerName, float ms) noexcept
     {
+        // mProfile是一个map,key是层的名字,value是一个Record结构体,包含时间和调用次数。
         mProfile[layerName].count++;
         mProfile[layerName].time += ms;
         if (std::find(mLayerNames.begin(), mLayerNames.end(), layerName) == mLayerNames.end())
@@ -146,6 +154,9 @@ TRT::TRT(
 ):stream_(stream)
 {
   initLibNvInferPlugins(&gLogger_, "");
+//   检查是否已经有缓存的TensorRT engine文件。
+// 如果有,则直接反序列化加载该engine文件,更快。
+// 如果没有,则从原始ONNX模型文件中加载并创建engine。
   std::fstream trtCache(modelCache, std::ifstream::in);
   checkCudaErrors(cudaEventCreate(&start));
   checkCudaErrors(cudaEventCreate(&stop));
@@ -153,7 +164,7 @@ TRT::TRT(
   {
     std::cout << "Loading Model: " << modelFile << std::endl;
     std::cout << "Building TRT engine from the model."<<std::endl;
-    // define builder
+    // define builder 创建Builder,Network和Parser。
     auto builder = (nvinfer1::createInferBuilder(gLogger_));
 
     // define network
@@ -168,7 +179,7 @@ TRT::TRT(
                   << std::endl;
         exit(-1);
     }
-    // dynamic shape
+    // dynamic shape 创建optimization profile来支持动态shape
     nvinfer1::IOptimizationProfile* profile = builder->createOptimizationProfile();
     // define config
     auto networkConfig = builder->createBuilderConfig();
@@ -193,7 +204,7 @@ TRT::TRT(
     networkConfig->addOptimizationProfile(profile);
     // set max workspace
     networkConfig->setMaxWorkspaceSize(size_t(1) << 30);
-
+    // 使用buildEngineWithConfig生成优化后的engine。
     engine = (builder->buildEngineWithConfig(*network, *networkConfig));
 
     if (engine == nullptr)
@@ -249,7 +260,7 @@ TRT::TRT(
     free(data);
     trtCache.close();
   }
-
+  // 创建Execution Context
   context = engine->createExecutionContext();
 
 }
@@ -257,10 +268,11 @@ TRT::TRT(
 int TRT::doinfer(void**buffers, bool do_profile)
 {
   int status;
-  SimpleProfiler profiler("perf");
-  if(do_profile)
+  SimpleProfiler profiler("perf"); //创建profiler,用于推理性能分析。
+  // 如果需要profile,将profiler设置到context中。
+  if(do_profile) 
       context->setProfiler(&profiler);
-  status = context->enqueueV2(buffers, stream_, &start);
+  status = context->enqueueV2(buffers, stream_, &start); // 调用context的enqueueV2函数执行推理。
   if(do_profile)
       std::cout << profiler;
   if (!status)
@@ -278,7 +290,7 @@ nvinfer1::Dims TRT::get_binding_shape(int index)
 int TRT::getPointSize() {
     return context->getBindingDimensions(0).d[2];
 }
-
+//PointPillar类构造函数:使用TensorRT加载ONNX模型到engine
 PointPillar::PointPillar(
   std::string modelFile,
   std::string engineFile,
@@ -308,11 +320,11 @@ PointPillar::~PointPillar(void)
   checkCudaErrors(cudaEventDestroy(start));
   checkCudaErrors(cudaEventDestroy(stop));
 }
-
+// getPointSize
 int PointPillar::getPointSize() {
   return trt_->getPointSize();
 }
-
+//doinfer函数:执行TensorRT推理,获取预测框结果
 int PointPillar::doinfer(
   void*points_data,
   unsigned int* points_size,

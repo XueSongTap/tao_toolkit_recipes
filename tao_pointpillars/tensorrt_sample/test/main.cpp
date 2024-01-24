@@ -38,9 +38,18 @@
               abort();                                            \
     }                                                             \
 }
+// 加载二进制文件到内存
+/*
+这样通过二进制方式打开文件,一次性读取整个文件,避免多次小范围读取文件内容。
+并将文件内容加载到一段连续的内存buffer中,方便后续直接访问处理。
 
+data和length作为输出参数,返回加载的内存buffer指针和长度,供调用者使用。
+
+这是一个常见的加载二进制文件到内存的实现方法。这里加载的是点云数据二进制文件,后面可以直接在内存中对点云数据进行处理。
+*/
 int loadData(const char *file, void **data, unsigned int *length)
 {
+  //打开二进制文件文件流dataFile,读取模式。
   std::fstream dataFile(file, std::ifstream::in);
 
   if (!dataFile.is_open())
@@ -49,13 +58,13 @@ int loadData(const char *file, void **data, unsigned int *length)
     return -1;
   }
 
-  //get length of file:
+  //get length of file:获取文件长度len:先定位到文件末尾,tellg()获取当前位置就是文件长度;然后重新定位到文件开头。
   unsigned int len = 0;
   dataFile.seekg (0, dataFile.end);
   len = dataFile.tellg();
   dataFile.seekg (0, dataFile.beg);
 
-  //allocate memory:
+  //allocate memory:分配大小为len的buffer。
   char *buffer = new char[len];
   if(buffer==NULL) {
     std::cout << "Can't malloc buffer."<<std::endl;
@@ -63,10 +72,10 @@ int loadData(const char *file, void **data, unsigned int *length)
     exit(-1);
   }
 
-  //read data as a block:
+  //read data as a block: 一次性读取整个文件到buffer中,read函数将文件内容读取到buffer。
   dataFile.read(buffer, len);
   dataFile.close();
-
+//   将buffer的地址和长度赋值给输出参数data和length。
   *data = (void*)buffer;
   *length = len;
   return 0;  
@@ -88,7 +97,7 @@ void split_str(
         ret.push_back(std::string(s + idx));
     }
 }
-
+//解析命令行参数,获取模型、数据、输出等路径参数
 void parse_args(
   int argc, char**argv,
   std::vector<std::string>& class_names,
@@ -178,7 +187,7 @@ std::string data_path;
 std::string data_type{"fp32"};
 std::string output_path;
 
-
+//调用SaveBoxPred保存结果到文件
 void SaveBoxPred(std::vector<Bndbox> boxes, std::string file_name)
 {
     std::ofstream ofs;
@@ -232,7 +241,7 @@ int main(int argc, char **argv)
 
   std::vector<Bndbox> nms_pred;
   nms_pred.reserve(100);
-
+    // 创建PointPillar模型实例进行推理
   PointPillar pointpillar(model_path, engine_path, stream, data_type);
 
   

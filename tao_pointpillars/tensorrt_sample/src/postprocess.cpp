@@ -183,7 +183,28 @@ inline float box_overlap(const Bndbox &box_a, const Bndbox &box_b) {
     }
     return fabs(area) / 2.0;
 }
+//nms_cpu函数:实现CPU上的NMS算法
+// 按置信度排序,遍历框进行IOU计算和抑制
 
+// 这段代码实现了非极大值抑制(NMS)的CPU算法,用来去除预测框之间的重叠。主要步骤如下:
+
+// 按置信度对预测框bndboxes进行排序,置信度高的排在前面。
+// 初始化向量suppressed,记录每个预测框是否被抑制的标记。
+// 遍历预测框,将未被抑制的框加入结果nms_pred。
+// 对当前框i,遍历其后的框j:
+    // (1) 计算两个框的交叠面积s_overlap,通过函数box_overlap。
+
+    // (2) 计算交并比iou=交叠面积/并集面积。
+
+    // (3) 如果iou大于阈值nms_thresh,则将框j标记为被抑制suppressed[j]=1。
+
+// 继续遍历下一个框i,直到最多顶部pre_nms_top_n个框。
+// 最后,nms_pred中存放了经NMS后留下的框。
+// 由此可见,NMS的思想是对每一个框,抑制掉与它重叠过大(大于阈值)的其他框。
+
+// 优点是可以快速去除大量冗余框,维持高质量的结果框。同时利用iou阈值控制抑制程度。
+
+// 这个CPU实现简单高效,通过向量保存抑制标记。可以配合GPU端 Predictor 使用。
 int nms_cpu(
     std::vector<Bndbox> bndboxes,
     const float nms_thresh,
